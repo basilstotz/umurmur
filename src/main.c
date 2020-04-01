@@ -64,6 +64,9 @@ int bindport6;
 char *bindaddr;
 char *bindaddr6;
 
+/*bs*/
+int noclients = 5;
+
 void lockfile(const char *pidfile)
 {
 	int lfp, flags;
@@ -177,6 +180,18 @@ void signal_handler(int sig)
 			Log_info("TERM signal. Shutting down.");
 			Server_shutdown();
 			break;
+	        case SIGUSR1:
+		        if(Client_count()>0){
+		              noclients = 5;
+		        }else{
+		              noclients--;
+		        }
+			if(noclients<=0){
+			      Log_info("USR1 signal. No Cleints. Shutting down.");
+			      Server_shutdown();
+			}
+			break;
+		  
 	}
 }
 
@@ -256,7 +271,7 @@ int main(int argc, char **argv)
 	char *conffile = NULL, *pidfile = NULL;
 	int c;
 	struct utsname utsbuf;
-
+	
 	/* Arguments */
 #ifdef POSIX_PRIORITY_SCHEDULING
 	while ((c = getopt(argc, argv, "drp:c:a:A:b:B:ht")) != EOF) {
@@ -348,6 +363,8 @@ int main(int argc, char **argv)
 		signal(SIGPIPE, SIG_IGN);
 		signal(SIGHUP, signal_handler); /* catch hangup signal */
 		signal(SIGTERM, signal_handler); /* catch kill signal */
+                /*bs*/
+		signal(SIGUSR1, signal_handler); /* catch usr1 signal */
 
 		/* Build system string */
 		if (uname(&utsbuf) == 0) {
