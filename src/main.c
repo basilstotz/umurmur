@@ -65,7 +65,9 @@ char *bindaddr;
 char *bindaddr6;
 
 /*bs*/
-int noclients = 5;
+int noclients = 0;
+int uptimer = 0;
+int running = false;
 
 void lockfile(const char *pidfile)
 {
@@ -174,6 +176,7 @@ void signal_handler(int sig)
 	switch(sig) {
 		case SIGHUP:
 			Log_info("HUP signal received.");
+		        running=true;	
 			Log_reset();
 			break;
 		case SIGTERM:
@@ -181,17 +184,24 @@ void signal_handler(int sig)
 			Server_shutdown();
 			break;
 	        case SIGUSR1:
-		        if(Client_count()>0){
-		              noclients = 5;
-		        }else{
-		              noclients--;
+		        if(running){
+		            noclients++;
+		            if( Client_count()>0 )noclients = 0;
+			    if( noclients >= 5 ){
+			          Log_info("USR1 signal: No clients. Shutting down.");
+			          Server_shutdown();
+			    }
 		        }
-			if(noclients<=0){
-			      Log_info("USR1 signal. No Cleints. Shutting down.");
-			      Server_shutdown();
+			break;
+	         case SIGUSR2:
+		        if(running){
+			      uptimer++;
+			      if( uptimer >= 60 ){
+			           Log_info("USR2 signal: Max uptime reached. Shutting down.");			        
+			           Server_shutdown();
+			      }
 			}
 			break;
-		  
 	}
 }
 
@@ -365,6 +375,7 @@ int main(int argc, char **argv)
 		signal(SIGTERM, signal_handler); /* catch kill signal */
                 /*bs*/
 		signal(SIGUSR1, signal_handler); /* catch usr1 signal */
+		signal(SIGUSR2, signal_handler); /* catch usr2 signal */
 
 		/* Build system string */
 		if (uname(&utsbuf) == 0) {
