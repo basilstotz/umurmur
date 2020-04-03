@@ -175,12 +175,12 @@ void signal_handler(int sig)
 {
 	switch(sig) {
 		case SIGHUP:
-			Log_info("HUP signal received.");
+			Log_info("HUP signal: Starting timer");
 		        running=true;	
 			Log_reset();
 			break;
 		case SIGTERM:
-			Log_info("TERM signal. Shutting down.");
+			Log_info("TERM signal: Shutting down.");
 			Server_shutdown();
 			break;
 	        case SIGUSR1:
