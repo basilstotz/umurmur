@@ -127,6 +127,7 @@ void DB_stop(){
   //sprintf(command,"dsfasdfa %d\n",slot);
   //Log_info(command);
   if(slot>=0){
+        kill(getppid(),1);
         sprintf(command,"mysql -e \"update slot set status=0, umurmurpid=-1, websockpid=-1, sessiontoken='' where id=%d;\"  umurmurd",slot);
         Log_info(command);
 	system(command);
