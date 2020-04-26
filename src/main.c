@@ -58,16 +58,82 @@
 #include "sharedmemory.h"
 #include "ban.h"
 
+/*#include "/usr/include/mariadb/mysql.h"*/
+
 char system_string[64], version_string[64];
 int bindport;
 int bindport6;
 char *bindaddr;
 char *bindaddr6;
 
-/*bs*/
+
+/***********************************           bs         ***********************************************/
 int noclients = 0;
 int uptimer = 0;
 int running = false;
+
+int umport = 0;
+int umport6 = 0;
+int slot = -1;
+
+int signal_dest = -1;
+
+/*http://draft.scyphus.co.jp/lang/c/url_parser.html*/
+
+void Signal_ready(){
+  //  Log_info("in signal_ready");
+  if(signal_dest>1)kill(signal_dest,10);
+  //  Log_info("after signal ready");
+}
+
+/*
+void Signal_active(){
+  if(signal_dest>1)kill(signal_dest,12);
+}
+*/
+
+void Signal_stop(){
+  if(signal_dest>1)kill(signal_dest,1);
+}
+  
+void DB_ready(){
+
+  char command[128];
+  
+  if(slot>=0){
+        sprintf(command,"mysql -e \"update slot set status=1, umurmurpid=%d, websockpid=%d where id=%d;\"  umurmurd",getpid(),getppid(),slot);
+        Log_info(command);
+	system(command);
+	//	Log_info("db_ready done");
+  }
+}
+
+/*
+void DB_active(){
+
+  char command[128];
+  int status=2;
+  if(slot>=0){
+        sprintf(command,"mysql -e \"update slot set status=%d where id=%d;\"  umurmurd",status,slot);
+        Log_info(command);
+	system(command);
+  }
+}
+*/
+
+void DB_stop(){
+
+  char command[128];
+  //sprintf(command,"dsfasdfa %d\n",slot);
+  //Log_info(command);
+  if(slot>=0){
+        sprintf(command,"mysql -e \"update slot set status=0, umurmurpid=-1, websockpid=-1, sessiontoken='' where id=%d;\"  umurmurd",slot);
+        Log_info(command);
+	system(command);
+  }
+}
+
+/****************************************************************************************************/
 
 void lockfile(const char *pidfile)
 {
@@ -175,8 +241,12 @@ void signal_handler(int sig)
 {
 	switch(sig) {
 		case SIGHUP:
-			Log_info("HUP signal: Starting timer");
-		        running=true;	
+		        if(!running){
+			     Log_info("HUP signal: Starting timer");
+		             running=true;
+			}else{
+			     Log_info("HUP signal: Timer aleady started");			     
+			}
 			Log_reset();
 			break;
 		case SIGTERM:
@@ -255,6 +325,7 @@ void printhelp()
 {
 	printf("uMurmur version %s ('%s'). Mumble protocol %d.%d.%d\n", UMURMUR_VERSION,
 		UMURMUR_CODENAME, PROTVER_MAJOR, PROTVER_MINOR, PROTVER_PATCH);
+	printf("       Version von Basil\n"); 
 	printf("Usage: umurmurd [-d] [-r] [-h] [-p <pidfile>] [-t] [-c <conf file>] [-a <addr>] [-b <port>]\n");
 	printf("       -d             - Do not daemonize - run in foreground.\n");
 #ifdef POSIX_PRIORITY_SCHEDULING
@@ -263,10 +334,14 @@ void printhelp()
 	printf("       -p <pidfile>   - Write PID to this file\n");
 	printf("       -c <conf file> - Specify configuration file (default %s)\n", DEFAULT_CONFIG);
 	printf("       -t             - Test config. Error message to stderr + non-zero exit code on error\n");
+	printf("       -s <slot>      - Set slot number\n");
+	printf("       -S <pid>       - Send signal to pid when set to ready or active\n");
 	printf("       -a <address>   - Bind to IP address\n");
 	printf("       -A <address>   - Bind to IPv6 address\n");
-	printf("       -b <port>      - Bind to port\n");
-	printf("       -B <port>      - Bind to port (IPv6)\n");
+	printf("       -u <port>      - Bind to umurmur port\n");	
+	printf("       -U <port>      - Bind to umurmur port (IPv6)\n");	
+	printf("       -b <port>      - Bind to sharemem port\n");
+	printf("       -B <port>      - Bind to sharemem port (IPv6)\n");
 	printf("       -h             - Print this help\n");
 	exit(0);
 }
@@ -284,9 +359,9 @@ int main(int argc, char **argv)
 	
 	/* Arguments */
 #ifdef POSIX_PRIORITY_SCHEDULING
-	while ((c = getopt(argc, argv, "drp:c:a:A:b:B:ht")) != EOF) {
+	while ((c = getopt(argc, argv, "drp:c:a:A:b:B:htu:U:S:s:")) != EOF) {
 #else
-		while ((c = getopt(argc, argv, "dp:c:a:A:b:B:ht")) != EOF) {
+		while ((c = getopt(argc, argv, "dp:c:a:A:b:B:htP:u:U:S:s:")) != EOF) {
 #endif
 			switch(c) {
 				case 'c':
@@ -297,9 +372,6 @@ int main(int argc, char **argv)
 					break;
 				case 'a':
 					bindaddr = optarg;
-					break;
-				case 'A':
-					bindaddr6 = optarg;
 					break;
 				case 'b':
 					bindport = atoi(optarg);
@@ -315,6 +387,18 @@ int main(int argc, char **argv)
 					break;
 				case 't':
 					testconfig = true;
+					break;
+				case 'u':
+					umport = atoi(optarg);
+					break;
+				case 'U':
+					umport6 = atoi(optarg);
+					break;
+				case 'S':
+				        signal_dest= atoi(optarg);
+					break;
+				case 's':
+				        slot = atoi(optarg);
 					break;
 #ifdef POSIX_PRIORITY_SCHEDULING
 				case 'r':
@@ -388,11 +472,14 @@ int main(int argc, char **argv)
 		}
 
 		/* Initializing */
+
+
 		SSLi_init();
 		Chan_init();
 		Client_init();
 		Ban_init();
-
+		
+		
 #ifdef USE_SHAREDMEMORY_API
     Sharedmemory_init( bindport, bindport6 );
 #endif
@@ -407,8 +494,14 @@ int main(int argc, char **argv)
 			Log_reset();
 		}
 
+
+		DB_ready();
+		Signal_ready();
+
+		
 		Server_run();
 
+		
 #ifdef USE_SHAREDMEMORY_API
     Sharedmemory_deinit();
 #endif
@@ -419,8 +512,12 @@ int main(int argc, char **argv)
 		Log_free();
 		Conf_deinit();
 
+		
 		if (pidfile != NULL)
 			unlink(pidfile);
 
+                DB_stop();
+		Signal_stop();
+		
 		return 0;
 	}

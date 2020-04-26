@@ -47,6 +47,10 @@ static config_t configuration;
 #define DEFAULT_BAN_LENGTH (60*60)
 #define DEFAULT_OPUS_THRESHOLD 100
 
+/* bs */
+extern int umport;
+extern int umport6;
+
 const char defaultconfig[] = DEFAULT_CONFIG;
 
 void Conf_init(const char *conffile)
@@ -242,23 +246,31 @@ int getIntConf(param_t param)
 
 	switch (param) {
 		case BINDPORT:
-			setting = config_lookup(&configuration, "bindport");
-			if (!setting)
-				return DEFAULT_BINDPORT;
-			else {
-				return config_setting_get_int(setting);
+		        if(umport==0){
+		             setting = config_lookup(&configuration, "bindport");
+			     if (!setting)
+			        	return DEFAULT_BINDPORT;
+			     else {
+			        	return config_setting_get_int(setting);
+			     }
+		        }else{
+			  return umport;
 			}
 			break;
 		case BINDPORT6:
-			setting = config_lookup(&configuration, "bindport6");
-			if (!setting)
-				/* If bindport6 is not specified, we default
-				 * to whatever bindport is, rather than always
-				 * default to 64738 */
-				return getIntConf(BINDPORT);
-			else {
-				return config_setting_get_int(setting);
-			}
+		        if(umport6==0){
+			        setting = config_lookup(&configuration, "bindport6");
+			        if (!setting)
+				      /* If bindport6 is not specified, we default
+				       * to whatever bindport is, rather than always
+				       * default to 64738 */
+				       return getIntConf(BINDPORT);
+			        else {
+				       return config_setting_get_int(setting);
+			        }
+		        }else{
+		               return umport6;
+		        }
 			break;
 		case BAN_LENGTH:
 			setting = config_lookup(&configuration, "ban_length");
